@@ -14,18 +14,8 @@ const RZP_OPTIONAL_HOLIDAYS = {
 function isMandatoryHoliday(k) { return !!RZP_MANDATORY_HOLIDAYS[k]; }
 function isOptionalHoliday(k) { return !!RZP_OPTIONAL_HOLIDAYS[k]; }
 
-// Razorpay 2026 Mandatory Holidays (auto-marked as leave)
-const MANDATORY_HOLIDAYS = {
-  '2026-01-01': 'New Year',
-  '2026-01-26': 'Republic Day',
-  '2026-03-04': 'Holi',
-  '2026-05-01': 'May Day / Buddha Pournima',
-  '2026-09-14': 'Ganesh Chaturthi',
-  '2026-10-02': 'Gandhi Jayanti',
-  '2026-10-21': 'Dussehra / Vijaya Dashami',
-  '2026-11-09': 'Diwali',
-  '2026-12-25': 'Christmas'
-};
+// Reuse RZP_MANDATORY_HOLIDAYS for calendar rendering too
+const MANDATORY_HOLIDAYS = RZP_MANDATORY_HOLIDAYS;
 
 const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
 const today = new Date();
@@ -51,8 +41,8 @@ function isFuture(y, m, d) {
 }
 function officeDaysNeededForTarget(present, eligible, targetFrac) {
   if (eligible <= 0 || (present / eligible) >= targetFrac) return 0;
-  if (targetFrac >= 1) return Infinity;
-  return Math.ceil(((targetFrac * eligible) - present) / (1 - targetFrac) - Number.EPSILON);
+  const needed = Math.ceil(targetFrac * eligible) - present;
+  return needed > eligible - present ? Infinity : needed;
 }
 
 function showToast(msg, color = '#4ade80') {
@@ -119,19 +109,8 @@ function render(data) {
   document.getElementById('s-wfh').textContent = wfh;
   document.getElementById('s-leave').textContent = leave;
 
-  // Count elapsed workdays only (up to and including today)
-  let elapsedWorkdays = 0;
-  const isCurrentMonth = y === today.getFullYear() && m === today.getMonth();
-  for (let d=1; d<=dim; d++) {
-    const dk2 = dateKey(y,m,d);
-    const pastOrToday = !isCurrentMonth || new Date(y,m,d) <= today;
-    if (!isWeekend(y,m,d) && !isMandatoryHoliday(dk2) && pastOrToday) {
-      elapsedWorkdays++;
-    }
-  }
-  // For past months use full workdays, for current month use elapsed
-  const denominator = isCurrentMonth ? elapsedWorkdays - leave : workdays - leave;
-  const eligible = denominator;
+  // Use total month workdays (pre-calculated for full month)
+  const eligible = workdays - leave;
   const pct = eligible > 0 ? Math.round((present / eligible) * 100) : 0;
   const fill = document.getElementById('prog-fill');
   fill.style.width = Math.min(pct, 100) + '%';
@@ -139,9 +118,8 @@ function render(data) {
   fill.style.background = pct >= attendanceTarget ? '#4ade80' : pct >= (attendanceTarget - 10) ? '#fbbf24' : '#f87171';
   document.getElementById('prog-pct').textContent = eligible > 0 ? `${pct}%  ${present}/${eligible}` : '—';
 
-  // Update the progress bar marker position to match target
-  const marker = document.querySelector('.prog-marker');
-  if (marker) marker.style.left = attendanceTarget + '%';
+  // Update the progress bar marker positions to match target
+  document.querySelectorAll('.prog-marker').forEach(m => m.style.left = attendanceTarget + '%');
 
   const needed = officeDaysNeededForTarget(present, eligible, targetFrac);
   const noteEl = document.getElementById('prog-note');
@@ -157,6 +135,29 @@ function render(data) {
   }
   noteEl.textContent = msg;
 
+  // Current week stats (Sun–Sat containing today)
+  const todayDow = today.getDay();
+  const weekStartDate = new Date(today);
+  weekStartDate.setDate(today.getDate() - todayDow);
+  let weekPresent = 0, weekWorkdays = 0, weekLeave = 0;
+  for (let i = 0; i < 7; i++) {
+    const wd = new Date(weekStartDate);
+    wd.setDate(weekStartDate.getDate() + i);
+    const wdk = dateKey(wd.getFullYear(), wd.getMonth(), wd.getDate());
+    if (!isWeekend(wd.getFullYear(), wd.getMonth(), wd.getDate()) && !isMandatoryHoliday(wdk)) {
+      weekWorkdays++;
+      const e = data[wdk];
+      if (e?.status === 'present') weekPresent++;
+      else if (e?.status === 'leave') weekLeave++;
+    }
+  }
+  const weekEligible = weekWorkdays - weekLeave;
+  const weekPct = weekEligible > 0 ? Math.round((weekPresent / weekEligible) * 100) : 0;
+  const weekFill = document.getElementById('week-prog-fill');
+  weekFill.style.width = Math.min(weekPct, 100) + '%';
+  weekFill.style.background = weekPct >= attendanceTarget ? '#4ade80' : weekPct >= (attendanceTarget - 10) ? '#fbbf24' : '#f87171';
+  document.getElementById('week-prog-pct').textContent = weekEligible > 0 ? `${weekPct}%  ${weekPresent}/${weekEligible}` : '—';
+
   renderCalendar(data, y, m);
 }
 
@@ -165,33 +166,103 @@ function renderCalendar(data, y, m) {
   const grid = document.getElementById('cal-grid');
   grid.innerHTML = '';
 
-  // Day of week headers
+  // Day of week headers + % column
   ['Su','Mo','Tu','We','Th','Fr','Sa'].forEach((d, i) => {
     const el = document.createElement('div');
     el.className = 'cal-dow' + (i===0||i===6 ? ' weekend' : '');
     el.textContent = d;
     grid.appendChild(el);
   });
+  const pctHead = document.createElement('div');
+  pctHead.className = 'cal-dow cal-pct-head';
+  pctHead.textContent = '%';
+  grid.appendChild(pctHead);
 
   const fdow = new Date(y, m, 1).getDay();
-  for (let i=0; i<fdow; i++) {
-    grid.appendChild(Object.assign(document.createElement('div'), { className: 'cal-day empty' }));
+  const dim = daysInMonth(y, m);
+
+  // Helper: count a day's stats into a row object
+  function countDay(row, yr, mo, day) {
+    const dk = dateKey(yr, mo, day);
+    if (isWeekend(yr, mo, day) || isMandatoryHoliday(dk)) return;
+    row.workdays++;
+    const status = data[dk]?.status;
+    if (status === 'present') row.present++;
+    else if (status === 'leave') row.leave++;
   }
 
-  const dim = daysInMonth(y, m);
-  for (let d=1; d<=dim; d++) {
+  // First pass: collect per-row stats (full Sun-Sat weeks, including cross-month days)
+  const rowStats = [];
+  let cur = { present: 0, workdays: 0, leave: 0 };
+
+  // First row: include previous month's trailing days (Sun..before 1st)
+  if (fdow > 0) {
+    const prevM = m === 0 ? 11 : m - 1;
+    const prevY = m === 0 ? y - 1 : y;
+    const prevDim = daysInMonth(prevY, prevM);
+    for (let i = 0; i < fdow; i++) {
+      countDay(cur, prevY, prevM, prevDim - fdow + 1 + i);
+    }
+  }
+
+  let pos = fdow;
+  for (let d = 1; d <= dim; d++) {
+    countDay(cur, y, m, d);
+    pos++;
+    if (pos === 7) { rowStats.push(cur); cur = { present: 0, workdays: 0, leave: 0 }; pos = 0; }
+  }
+
+  // Last row: include next month's leading days (after last day..Sat)
+  if (pos > 0) {
+    const nextM = m === 11 ? 0 : m + 1;
+    const nextY = m === 11 ? y + 1 : y;
+    let nextD = 1;
+    while (pos < 7) { countDay(cur, nextY, nextM, nextD); nextD++; pos++; }
+    rowStats.push(cur);
+  }
+
+  // Render
+  let rowIdx = 0;
+  let posInRow = 0;
+
+  function addWeekPct() {
+    const el = document.createElement('div');
+    el.className = 'cal-week-pct';
+    const row = rowStats[rowIdx];
+    const elig = row.workdays - row.leave;
+    if (elig > 0) {
+      const p = Math.round((row.present / elig) * 100);
+      el.textContent = p + '%';
+      el.classList.add(p >= attendanceTarget ? 'pct-good' : p >= (attendanceTarget - 10) ? 'pct-warn' : 'pct-bad');
+    } else {
+      el.textContent = '—';
+      el.classList.add('pct-none');
+    }
+    grid.appendChild(el);
+    rowIdx++;
+  }
+
+  // Empty cells for month offset
+  for (let i = 0; i < fdow; i++) {
+    grid.appendChild(Object.assign(document.createElement('div'), { className: 'cal-day empty' }));
+    posInRow++;
+  }
+
+  for (let d = 1; d <= dim; d++) {
     const el = document.createElement('div');
     const wknd = isWeekend(y, m, d);
     const isToday = y===today.getFullYear() && m===today.getMonth() && d===today.getDate();
     const future = isFuture(y, m, d);
-    const entry = data[dateKey(y, m, d)];
+    const dk = dateKey(y, m, d);
+    const entry = data[dk];
     const status = entry?.status;
 
-    const dk = dateKey(y, m, d);
-    const isHoliday = !status && MANDATORY_HOLIDAYS[dk];
+    const holidayName = MANDATORY_HOLIDAYS[dk];
+    const isHoliday = !status && holidayName;
     let classes = 'cal-day';
     if (wknd) classes += ' weekend';
     if (isToday) classes += ' today';
+    if (isHoliday) classes += ' d-holiday';
     if (future && !isHoliday && !status) classes += ' future';
     if (status) classes += ' d-' + status;
     el.className = classes;
@@ -201,14 +272,34 @@ function renderCalendar(data, y, m) {
     num.textContent = d;
     el.appendChild(num);
 
-
-
-    // Click to edit — any non-weekend, non-holiday day
-    if (!wknd && !isHoliday) {
+    if (isHoliday) {
+      num.style.display = 'none';
+      const label = document.createElement('div');
+      label.className = 'd-hol-icon';
+      label.textContent = '🏖';
+      el.appendChild(label);
+      const holDate = new Date(y, m, d).toLocaleDateString('en-IN', { day:'numeric', month:'short' });
+      el.addEventListener('click', () => showToast(`${holDate} — ${holidayName}`, '#93c5fd'));
+    } else if (!wknd) {
       el.addEventListener('click', () => openModal(y, m, d, entry));
     }
 
     grid.appendChild(el);
+    posInRow++;
+
+    if (posInRow === 7) {
+      addWeekPct();
+      posInRow = 0;
+    }
+  }
+
+  // Fill remaining cells in last row
+  if (posInRow > 0) {
+    while (posInRow < 7) {
+      grid.appendChild(Object.assign(document.createElement('div'), { className: 'cal-day empty' }));
+      posInRow++;
+    }
+    addWeekPct();
   }
 }
 
@@ -250,24 +341,6 @@ function setDayStatus(status) {
   });
 }
 
-function override(status) {
-  const action = status === 'present' ? 'markPresent' : status === 'wfh' ? 'markWFH' : 'markLeave';
-  chrome.runtime.sendMessage({ action }, () => {
-    showToast('Marked: ' + status.toUpperCase());
-    setTimeout(loadAndRender, 300);
-  });
-}
-
-function clearToday() {
-  chrome.storage.local.get(['attendance'], (r) => {
-    const data = r.attendance || {};
-    delete data[todayKey()];
-    chrome.storage.local.set({ attendance: data }, () => {
-      showToast('Today cleared', '#888');
-      setTimeout(loadAndRender, 200);
-    });
-  });
-}
 
 function exportCSV() {
   chrome.storage.local.get(['attendance'], (r) => {
@@ -396,14 +469,6 @@ document.addEventListener('DOMContentLoaded', () => {
   document.getElementById('next-month').addEventListener('click', () => {
     viewMonth++; if (viewMonth > 11) { viewMonth = 0; viewYear++; } loadAndRender();
   });
-
-  // Today overrides
-  document.getElementById('btn-present').addEventListener('click', () => override('present'));
-  document.getElementById('btn-wfh').addEventListener('click', () => override('wfh'));
-  document.getElementById('btn-leave').addEventListener('click', () => override('leave'));
-  document.getElementById('btn-clear').addEventListener('click', clearToday);
-
-
 
   // Modal buttons
   document.getElementById('modal-present').addEventListener('click', () => setDayStatus('present'));

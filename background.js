@@ -1,6 +1,8 @@
-const OFFICE_LAT = 12.93725;
-const OFFICE_LNG = 77.610268;
-const OFFICE_RADIUS_M = 200;
+const OFFICE_LOCATIONS = [
+  { lat: 12.93725, lng: 77.610268 },
+  { lat: 12.938932, lng: 77.609552 },
+];
+const OFFICE_RADIUS_M = 100;
 const CHECK_HOUR_START = 7;
 const CHECK_HOUR_END = 19;
 const CHECK_INTERVAL_MIN = 30;
@@ -111,9 +113,9 @@ async function checkAndMark() {
 
   try {
     const { lat, lng } = await getLocation();
-    const dist = haversineDistance(lat, lng, OFFICE_LAT, OFFICE_LNG);
+    const nearOffice = OFFICE_LOCATIONS.some(o => haversineDistance(lat, lng, o.lat, o.lng) <= OFFICE_RADIUS_M);
 
-    if (dist <= OFFICE_RADIUS_M) {
+    if (nearOffice) {
       await saveStatus(today, 'present');
       chrome.notifications.create('att-' + Date.now(), {
         type: 'basic', iconUrl: 'icon48.png',
@@ -157,12 +159,12 @@ const RZP_MANDATORY_HOLIDAYS = {
 };
 function isMandatoryHoliday(dateStr) { return !!RZP_MANDATORY_HOLIDAYS[dateStr]; }
 
+
 chrome.runtime.onStartup.addListener(() => {
   checkAndMark();
 });
 
 chrome.runtime.onInstalled.addListener(() => {
-  // Request notification permission
   chrome.notifications.create('att-welcome', {
     type: 'basic', iconUrl: 'icon48.png',
     title: 'Attendance Tracker Active',
