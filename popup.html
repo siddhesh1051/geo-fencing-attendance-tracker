@@ -1,0 +1,245 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Razor Attendance Tracker</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=DM+Mono:wght@400;500&family=DM+Sans:wght@400;500&display=swap');
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:'DM Sans',sans-serif;background:#0f0f0f;color:#f0f0f0;width:340px;min-height:400px}
+  .header{padding:12px 14px 10px;border-bottom:1px solid #222;display:flex;align-items:center;justify-content:space-between;gap:8px}
+  .header h1{font-size:14px;font-weight:500;letter-spacing:-0.01em}
+  .header p{font-size:11px;color:#555;font-family:'DM Mono',monospace;margin-top:2px}
+  .header-actions{display:flex;gap:4px;flex-shrink:0}
+  .icon-btn{background:#1a1a1a;border:1px solid #2a2a2a;border-radius:7px;color:#666;width:30px;height:30px;display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all 0.15s;position:relative}
+  .icon-btn:hover{background:#252525;color:#ccc;border-color:#444}
+  .notif-banner{margin:10px 12px 0;background:#1a1f2e;border:1px solid #2a3a5a;border-radius:10px;padding:12px;display:none}
+  .notif-banner-row{display:flex;gap:10px;align-items:flex-start;margin-bottom:10px}
+  .notif-icon{font-size:18px;flex-shrink:0;line-height:1.2}
+  .notif-text{flex:1}
+  .notif-title{font-size:11px;font-weight:500;color:#93c5fd;margin-bottom:6px}
+  .notif-steps{list-style:none;padding:0;display:flex;flex-direction:column;gap:3px}
+  .notif-steps li{font-size:10px;color:#7a9cc4;font-family:'DM Mono',monospace;padding-left:10px;position:relative}
+  .notif-steps li::before{content:'★';position:absolute;left:0;font-size:8px;color:#3b82f6;top:1px}
+  .notif-steps li strong{color:#93c5fd;font-weight:500}
+  .notif-close{background:none;border:none;color:#4a6a8a;cursor:pointer;font-size:12px;padding:0;line-height:1;flex-shrink:0}
+  .notif-close:hover{color:#93c5fd}
+  .notif-enable-btn{width:100%;padding:7px;border-radius:6px;border:1px solid #3b5a8a;background:#1e3a6e;color:#93c5fd;font-size:11px;font-family:'DM Mono',monospace;cursor:pointer;transition:all 0.15s}
+  .notif-enable-btn:hover{background:#2a4a8e;color:#bfdbfe}
+  .today-card{margin:8px 12px;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:10px;padding:10px 14px}
+  .today-label{font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:#555;font-family:'DM Mono',monospace;margin-bottom:6px}
+  .today-status{font-size:22px;font-weight:500;font-family:'DM Mono',monospace;letter-spacing:-0.02em}
+  .s-present{color:#4ade80}.s-wfh{color:#fbbf24}.s-leave{color:#f87171}.s-unset{color:#444}
+  .today-time{font-size:10px;color:#555;font-family:'DM Mono',monospace;margin-top:3px}
+  .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin:0 12px 8px}
+  .stat{background:#1a1a1a;border:1px solid #222;border-radius:8px;padding:8px 6px;text-align:center}
+  .stat-val{font-size:18px;font-weight:500;font-family:'DM Mono',monospace}
+  .stat-label{font-size:9px;color:#555;text-transform:uppercase;letter-spacing:0.06em;margin-top:2px}
+  .progress{margin:0 12px 8px;background:#1a1a1a;border:1px solid #222;border-radius:8px;padding:8px 12px}
+  .prog-row{display:flex;align-items:center;gap:8px}
+  .prog-label{font-size:10px;color:#555;font-family:'DM Mono',monospace;min-width:80px}
+  .prog-track{flex:1;height:4px;background:#2a2a2a;border-radius:2px;overflow:hidden;position:relative}
+  .prog-fill{height:100%;border-radius:2px}
+  .prog-marker{position:absolute;left:60%;top:-3px;bottom:-3px;width:1px;background:#444}
+  .prog-pct{font-size:10px;font-family:'DM Mono',monospace;min-width:28px;text-align:right;color:#888}
+  .prog-note{font-size:10px;color:#555;font-family:'DM Mono',monospace;margin-top:6px}
+  .loc-banner{margin:10px 12px 0;background:#2a2200;border:1px solid #554400;border-radius:10px;padding:12px}
+  .loc-banner .notif-steps li::before{color:#fbbf24}
+  .loc-banner .notif-steps li{color:#a89060}
+  .loc-banner .notif-steps li strong{color:#fbbf24}
+  .settings-row{margin:0 12px 8px;background:#1a1a1a;border:1px solid #222;border-radius:8px;padding:8px 12px;display:flex;align-items:center;justify-content:space-between}
+  .settings-label{font-size:10px;color:#555;font-family:'DM Mono',monospace}
+  .target-input{width:50px;background:#111;border:1px solid #333;border-radius:5px;color:#f0f0f0;font-size:12px;font-family:'DM Mono',monospace;padding:4px 6px;text-align:center}
+  .target-input:focus{outline:none;border-color:#555}
+  .section-label{font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:#555;font-family:'DM Mono',monospace;margin:0 12px 4px}
+  .actions{margin:0 12px 8px;display:flex;flex-direction:column;gap:6px}
+  .btn-row{display:flex;gap:6px}
+  .btn{flex:1;padding:8px 6px;border-radius:7px;border:1px solid #2a2a2a;background:#1a1a1a;color:#888;font-size:11px;font-family:'DM Mono',monospace;cursor:pointer;transition:all 0.15s}
+  .btn:hover{background:#222;color:#f0f0f0}
+  .btn.present{border-color:#3B6D11;color:#4ade80}.btn.present:hover{background:#1a3d2b}
+  .btn.wfh{border-color:#854F0B;color:#fbbf24}.btn.wfh:hover{background:#3d2f0a}
+  .btn.leave{border-color:#A32D2D;color:#f87171}.btn.leave:hover{background:#3d1a1a}
+  .btn.clear{border-color:#333;color:#555}.btn.clear:hover{background:#222;color:#888}
+
+
+  /* Calendar */
+  .cal{margin:0 12px 8px}
+  .cal-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:8px}
+  .cal-title{font-size:12px;font-family:'DM Mono',monospace;color:#aaa;font-weight:500}
+  .cal-nav{display:flex;gap:4px;align-items:center}
+  .cal-nav button{background:#1a1a1a;border:1px solid #333;border-radius:4px;color:#777;font-size:11px;padding:2px 9px;cursor:pointer}
+  .cal-nav button:hover{color:#f0f0f0;background:#2a2a2a}
+  .cal-grid{display:grid;grid-template-columns:repeat(7,1fr);gap:3px}
+  .cal-dow{text-align:center;font-size:9px;color:#555;font-family:'DM Mono',monospace;padding:4px 0 3px;text-transform:uppercase;letter-spacing:0.04em}
+  .cal-dow.weekend{color:#333}
+  .cal-day.mandatory-holiday{background:#1a1a1a !important;border-color:#2a2a2a !important}
+  .cal-day.mandatory-holiday .d-num{color:#444 !important;font-weight:400}
+  .d-hol-label{font-size:7px;color:#3a3a3a;font-family:'DM Mono',monospace;line-height:1;text-align:center;white-space:nowrap;overflow:hidden;max-width:100%}
+  .cal-day{text-align:center;font-family:'DM Mono',monospace;border-radius:6px;min-height:28px;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:1px;cursor:pointer;transition:all 0.12s;border:1px solid transparent}
+  .cal-day:hover:not(.weekend):not(.empty){border-color:#444;background:#1e1e1e}
+  .cal-day.today{border:1.5px solid #555 !important;background:#1a1a1a}
+  .cal-day.weekend{cursor:default;opacity:0.2}
+  .cal-day.empty{cursor:default;border:none}
+  .cal-day.future:not(.d-leave){opacity:0.35}
+  .cal-day .d-num{font-size:10px;font-weight:500;line-height:1;color:#777}
+  .cal-day.today .d-num{color:#fff}
+
+  /* Colored background for marked days */
+  .cal-day.d-present{background:#1a4d2e;border-color:#4ade80 !important}
+  .cal-day.d-present .d-num{color:#86efac;font-weight:600}
+  .cal-day.d-wfh{background:#3d2e00;border-color:#fbbf24 !important}
+  .cal-day.d-wfh .d-num{color:#fde68a;font-weight:600}
+  .cal-day.d-leave{background:#3d1515;border-color:#f87171 !important}
+  .cal-day.d-leave .d-num{color:#fca5a5;font-weight:600}
+
+  /* Holiday emoji label */
+  .d-label{font-size:10px;line-height:1}
+  .cal-day.d-holiday{background:#1e1e1e;border-color:#333 !important;cursor:default}
+  .cal-day.d-holiday .d-num{color:#555}
+  .cal-day.d-holiday .d-label{color:#555}
+
+  /* Day picker modal */
+  .modal-backdrop{position:fixed;inset:0;background:rgba(0,0,0,0.6);z-index:100;display:flex;align-items:center;justify-content:center}
+  .modal{background:#1a1a1a;border:1px solid #333;border-radius:12px;padding:16px;width:220px}
+  .modal-date{font-size:11px;font-family:'DM Mono',monospace;color:#888;margin-bottom:12px}
+  .modal-opts{display:flex;flex-direction:column;gap:6px}
+  .modal-btn{padding:9px 12px;border-radius:7px;border:1px solid #2a2a2a;background:#111;font-size:11px;font-family:'DM Mono',monospace;cursor:pointer;text-align:left;transition:all 0.15s}
+  .modal-btn:hover{background:#222}
+  .modal-btn.present{border-left:3px solid #4ade80;color:#4ade80}
+  .modal-btn.wfh{border-left:3px solid #fbbf24;color:#fbbf24}
+  .modal-btn.leave{border-left:3px solid #f87171;color:#f87171}
+  .modal-btn.clear{border-left:3px solid #444;color:#666}
+  .modal-cancel{margin-top:8px;width:100%;padding:7px;border:none;background:none;color:#555;font-size:11px;font-family:'DM Mono',monospace;cursor:pointer;border-radius:6px}
+  .modal-cancel:hover{background:#222;color:#888}
+
+  #toast{position:fixed;bottom:12px;left:12px;right:12px;background:#1a1a1a;border:1px solid #2a2a2a;border-radius:7px;padding:8px 12px;font-size:11px;font-family:'DM Mono',monospace;color:#4ade80;display:none;text-align:center;z-index:200}
+</style>
+</head>
+<body>
+
+<div class="header">
+  <div>
+    <h1>Razor Attendance Tracker</h1>
+    <p id="date-str"></p>
+  </div>
+  <div class="header-actions">
+    <button class="icon-btn" id="btn-import" title="Import CSV">
+      <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M7.5 5V13M4 8l3.5-3.5L11 8"/><rect x="2" y="1.5" width="11" height="1.5" rx="0.75"/>
+      </svg>
+    </button>
+    <button class="icon-btn" id="btn-export" title="Export CSV">
+      <svg width="15" height="15" viewBox="0 0 15 15" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M7.5 10V2M4 7l3.5 3.5L11 7"/><rect x="2" y="12" width="11" height="1.5" rx="0.75"/>
+      </svg>
+    </button>
+  </div>
+</div>
+
+<div class="notif-banner" id="notif-banner">
+  <div class="notif-banner-row">
+    <span class="notif-icon">🔔</span>
+    <div class="notif-text">
+      <div class="notif-title">Enable notifications to get marked alerts</div>
+      <ul class="notif-steps">
+        <li>Click <strong>Allow</strong> if Chrome asks for permission</li>
+        <li>Or go to <strong>System Settings → Notifications → Chrome → On</strong></li>
+        <li>Then reload this extension</li>
+      </ul>
+    </div>
+    <button class="notif-close" id="notif-close">✕</button>
+  </div>
+  <button class="notif-enable-btn" id="notif-enable">Enable Notifications</button>
+</div>
+
+<div class="loc-banner" id="loc-banner" style="display:none">
+  <div class="notif-banner-row">
+    <span class="notif-icon">📍</span>
+    <div class="notif-text">
+      <div class="notif-title" style="color:#fbbf24">Location access required</div>
+      <ul class="notif-steps">
+        <li>Go to <strong>System Settings → Privacy & Security → Location Services</strong></li>
+        <li>Enable <strong>Google Chrome</strong></li>
+        <li>Then click Test below</li>
+      </ul>
+    </div>
+    <button class="notif-close" id="loc-close">✕</button>
+  </div>
+  <button class="notif-enable-btn" id="loc-test" style="border-color:#854F0B;background:#3d2e00;color:#fbbf24">Test Location Access</button>
+</div>
+
+<div class="today-card">
+  <div class="today-label">Today</div>
+  <div class="today-status s-unset" id="today-status">NOT SET</div>
+  <div class="today-time" id="today-time">checking every 45 mins...</div>
+</div>
+
+<div class="stats">
+  <div class="stat"><div class="stat-val" id="s-present" style="color:#4ade80">0</div><div class="stat-label">Present</div></div>
+  <div class="stat"><div class="stat-val" id="s-wfh" style="color:#fbbf24">0</div><div class="stat-label">WFH</div></div>
+  <div class="stat"><div class="stat-val" id="s-leave" style="color:#f87171">0</div><div class="stat-label">Leave</div></div>
+</div>
+
+<div class="progress">
+  <div class="prog-row">
+    <span class="prog-label">attendance</span>
+    <div class="prog-track">
+      <div class="prog-fill" id="prog-fill" style="width:0%"></div>
+      <div class="prog-marker"></div>
+    </div>
+    <span class="prog-pct" id="prog-pct">0%</span>
+  </div>
+  <div class="prog-note" id="prog-note">—</div>
+</div>
+
+<div class="settings-row">
+  <span class="settings-label">min attendance target</span>
+  <div style="display:flex;align-items:center;gap:4px">
+    <input type="number" id="target-pct" class="target-input" min="10" max="100" value="60">
+    <span style="font-size:11px;color:#555;font-family:'DM Mono',monospace">%</span>
+  </div>
+</div>
+
+<div class="cal">
+  <div class="cal-head">
+    <span class="cal-title" id="cal-title">—</span>
+    <div class="cal-nav">
+      <button id="prev-month">←</button>
+      <button id="next-month">→</button>
+    </div>
+  </div>
+  <div class="cal-grid" id="cal-grid"></div>
+</div>
+
+<div class="section-label">Override today</div>
+<div class="actions">
+  <div class="btn-row">
+    <button class="btn present" id="btn-present">Present</button>
+    <button class="btn wfh" id="btn-wfh">WFH</button>
+    <button class="btn leave" id="btn-leave">Leave</button>
+    <button class="btn clear" id="btn-clear">Clear</button>
+  </div>
+</div>
+
+
+<input type="file" id="file-import" accept=".csv" style="display:none">
+
+<!-- Day edit modal -->
+<div class="modal-backdrop" id="modal" style="display:none">
+  <div class="modal">
+    <div class="modal-date" id="modal-date"></div>
+    <div class="modal-opts">
+      <button class="modal-btn present" id="modal-present">● Present — in office</button>
+      <button class="modal-btn wfh" id="modal-wfh">● WFH — working from home</button>
+      <button class="modal-btn leave" id="modal-leave">● Leave / holiday</button>
+      <button class="modal-btn clear" id="modal-clear">○ Clear entry</button>
+    </div>
+    <button class="modal-cancel" id="modal-cancel">Cancel</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+<script src="popup.js"></script>
+<div style="height:8px"></div>
+</body>
+</html>
