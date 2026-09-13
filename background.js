@@ -1,6 +1,7 @@
 const OFFICE_LOCATIONS = [
-  { lat: 12.93725, lng: 77.610268 },
-  { lat: 12.938932, lng: 77.609552 },
+  { lat: 12.93725, lng: 77.610268 },      // Arena, Bangalore
+  { lat: 12.938932, lng: 77.609552 },      // SJR, Bangalore
+  { lat: 28.495432, lng: 77.092365 },      // Gurgaon
 ];
 const OFFICE_RADIUS_M = 100;
 const CHECK_HOUR_START = 7;
