@@ -136,11 +136,3 @@ These are excluded from workday counts:
 - If the data looks sparse or has gaps, mention it — the user may have forgotten to open Chrome some days
 - Use the user's target percentage (default 60%) when discussing whether they're on track
 
-## Extension Source Code
-
-The extension source lives at:
-```
-/Users/siddhesh.patil/Desktop/Learning/razorpay-attendance-extension/
-```
-Key files: `background.js` (auto-check logic), `popup.js` (UI + stats), `popup.html` (interface).
-Read these if the user asks about how the extension works internally or wants to modify it.
